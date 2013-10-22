@@ -1,0 +1,12 @@
+{
+	"folders":
+	[
+		{
+			"follow_symlinks": true,
+			"path": "/home/parallels/School/CS-360/labs/httPyServer"
+		}
+	],
+	"settings": {
+		"python-interpreter": "/home/parallels/virtualenvs/cs360/bin/python"
+	}
+}
