@@ -2,6 +2,7 @@ import select
 import socket
 import sys
 from configuration import Configuration
+from clientConnection import ClientConnection
 
 
 '''
@@ -26,7 +27,7 @@ class Server:
         # prepare the dictionary of clients
         self.clients = {}
 
-        self.size = 1024
+        self.timeout = int(self.config.getParameterValue('timeout', 1))
 
     '''
     Set up the socket for incoming clients
@@ -37,6 +38,7 @@ class Server:
             self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self.server.bind((self.host, self.port))
             self.server.listen(5)
+            self.server.setblocking(0)
         except socket.error, (value, message):
             if self.server:
                 self.server.close()
@@ -53,8 +55,7 @@ class Server:
         while True:
             # poll sockets
             try:
-                sockets = self.poller.poll(
-                    timeout=int(self.config.getParameterValue('timeout')))
+                sockets = self.poller.poll(timeout=self.timeout)
             except:
                 return
 
@@ -92,16 +93,17 @@ class Server:
     '''
     def handleServer(self):
         (client, address) = self.server.accept()
-        self.clients[client.fileno()] = client
+        client.setblocking(0)
+        self.clients[client.fileno()] = ClientConnection(client, self.timeout)
         self.poller.register(client.fileno(), self.pollmask)
 
     '''
     Handle client request to server
     '''
     def handleClient(self, socket):
-        data = self.clients[socket].recv(self.size)
-        if data:
-            self.clients[socket].send(data)
+        request = self.clients[socket].getRequest()
+        if request:
+            self.clients[socket].send(request)
         else:
             self.poller.unregister(socket)
             self.clients[socket].close()
