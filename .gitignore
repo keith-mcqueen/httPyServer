@@ -36,5 +36,5 @@ nosetests.xml
 .pydevproject
 
 # sublime text
-.sublime-project
-.sublime-workspace
+*.sublime-project
+*.sublime-workspace
