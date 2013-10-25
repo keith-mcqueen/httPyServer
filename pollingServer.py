@@ -3,6 +3,7 @@ import socket
 import sys
 from configuration import Configuration
 from clientConnection import ClientConnection
+from httpRequestHandler import HttpRequestHandler
 
 
 '''
@@ -103,11 +104,14 @@ class Server:
     def handleClient(self, socket):
         request = self.clients[socket].getRequest()
         if request:
-            self.clients[socket].send(request)
+            self.handleRequest(self.clients[socket], request, self.config)
         else:
             self.poller.unregister(socket)
             self.clients[socket].close()
             del self.clients[socket]
+
+    def handleRequest(self, client, request, config):
+        HttpRequestHandler().handleRequest(client, request, config)
 
 
 if __name__ == "__main__":

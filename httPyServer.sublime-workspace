@@ -4,6 +4,30 @@
 		"selected_items":
 		[
 			[
+				"get",
+				"getParameterValue(key)	(attribute, function)"
+			],
+			[
+				"set",
+				"setParameter(key, value)	(attribute, function)"
+			],
+			[
+				"me",
+				"mediaType	(local, instance)"
+			],
+			[
+				"k",
+				"keys  (function)"
+			],
+			[
+				"add",
+				"addDomain  (function)"
+			],
+			[
+				"file",
+				"filename	(local, instance)"
+			],
+			[
 				"con",
 				"configurationMethods	(attribute, instance)"
 			],
@@ -28,18 +52,21 @@
 	"buffers":
 	[
 		{
-			"contents": "import select\nimport socket\nimport sys\n\n\n'''\nPolling Server\n'''\n\n\nclass Server:\n    '''\n    *** initializer ***\n    '''\n    def __init__(self, port):\n        self.configMethods = {\n        }\n\n        # load the configuration file\n        #self.loadConfiguration()\n\n        self.host = \"\"\n        self.port = port\n\n        # open the socket\n        self.open_socket()\n\n        # prepare the dictionary of clients\n        self.clients = {}\n\n        self.size = 1024\n\n    '''\n    read the server configuration from the 'web.conf' file in the local\n    directory\n    '''\n    def loadConfiguration(self):\n        with open(\"web.conf\", 'r') as config_file:\n            for line in iter(config_file):\n                # strip the trailing EOL char(S)\n                line = line.lower().strip('\\n\\r')\n\n                # split the string into words (delimited by whitespace)\n                words = line.split()\n                if len(words) <= 0:\n                    continue\n\n                # invoke the proper method based on the keyword\n                keyword = words[0]\n                if keyword in self.configMethods:\n                    getattr(self, self.configMethods[keyword])(words[1:])\n\n    def addDomain(self, *args):\n        print \"adding domain\" + str(args)\n\n    def addMedia(self, *args):\n        print \"adding media type\" + str(args)\n\n    def addParameter(self, *args):\n        print \"adding parameter\" + str(args)\n\n    '''\n    Set up the socket for incoming clients\n    '''\n    def open_socket(self):\n        try:\n            self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\n            self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)\n            self.server.bind((self.host, self.port))\n            self.server.listen(5)\n        except socket.error, (value, message):\n            if self.server:\n                self.server.close()\n            print \"Could not open socket: \" + message\n            sys.exit(1)\n\n    '''\n    Use poll() to handle each incoming client\n    '''\n    def run(self):\n        self.poller = select.epoll()\n        self.pollmask = select.EPOLLIN | select.EPOLLHUP | select.EPOLLERR\n        self.poller.register(self.server, self.pollmask)\n        while True:\n            # poll sockets\n            try:\n                sockets = self.poller.poll(timeout=1)\n            except:\n                return\n\n            for (socket, event) in sockets:\n                # handle errors\n                if event & (select.POLLHUP | select.POLLERR):\n                    self.handleError(socket)\n                    continue\n\n                # handle the server socket\n                if socket == self.server.fileno():\n                    self.handleServer()\n                    continue\n\n                # handle client socket\n                self.handleClient(socket)\n\n    '''\n    Handle error condition\n    '''\n    def handleError(self, socket):\n        self.poller.unregister(socket)\n        if socket == self.server.fileno():\n            # recreate server socket\n            self.server.close()\n            self.open_socket()\n            self.poller.register(self.server, self.pollmask)\n        else:\n            # close the socket\n            self.clients[socket].close()\n            del self.clients[socket]\n\n    '''\n    Handle client connection to server\n    '''\n    def handleServer(self):\n        (client, address) = self.server.accept()\n        self.clients[client.fileno()] = client\n        self.poller.register(client.fileno(), self.pollmask)\n\n    '''\n    Handle client request to server\n    '''\n    def handleClient(self, socket):\n        data = self.clients[socket].recv(self.size)\n        if data:\n            self.clients[socket].send(data)\n        else:\n            self.poller.unregister(socket)\n            self.clients[socket].close()\n            del self.clients[socket]\n\n\nif __name__ == \"__main__\":\n    s = Server(8080)\n    s.loadConfiguration()\n",
+			"contents": "import select\nimport socket\nimport sys\nfrom configuration import Configuration\n\n\n'''\nPolling Server\n'''\n\n\nclass Server:\n    '''\n    *** initializer ***\n    '''\n    def __init__(self, port):\n        # load the configuration file\n        self.config = Configuration('web.conf')\n\n        self.host = \"\"\n        self.port = port\n\n        # open the socket\n        self.open_socket()\n\n        # prepare the dictionary of clients\n        self.clients = {}\n\n        self.size = 1024\n\n    '''\n    Set up the socket for incoming clients\n    '''\n    def open_socket(self):\n        try:\n            self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\n            self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)\n            self.server.bind((self.host, self.port))\n            self.server.listen(5)\n        except socket.error, (value, message):\n            if self.server:\n                self.server.close()\n            print \"Could not open socket: \" + message\n            sys.exit(1)\n\n    '''\n    Use poll() to handle each incoming client\n    '''\n    def run(self):\n        self.poller = select.epoll()\n        self.pollmask = select.EPOLLIN | select.EPOLLHUP | select.EPOLLERR\n        self.poller.register(self.server, self.pollmask)\n        while True:\n            # poll sockets\n            try:\n                sockets = self.poller.poll(\n                    timeout=int(self.config.getParameterValue('timeout')))\n            except:\n                return\n\n            for (socket, event) in sockets:\n                # handle errors\n                if event & (select.POLLHUP | select.POLLERR):\n                    self.handleError(socket)\n                    continue\n\n                # handle the server socket\n                if socket == self.server.fileno():\n                    self.handleServer()\n                    continue\n\n                # handle client socket\n                self.handleClient(socket)\n\n    '''\n    Handle error condition\n    '''\n    def handleError(self, socket):\n        self.poller.unregister(socket)\n        if socket == self.server.fileno():\n            # recreate server socket\n            self.server.close()\n            self.open_socket()\n            self.poller.register(self.server, self.pollmask)\n        else:\n            # close the socket\n            self.clients[socket].close()\n            del self.clients[socket]\n\n    '''\n    Handle client connection to server\n    '''\n    def handleServer(self):\n        (client, address) = self.server.accept()\n        self.clients[client.fileno()] = client\n        self.poller.register(client.fileno(), self.pollmask)\n\n    '''\n    Handle client request to server\n    '''\n    def handleClient(self, socket):\n        data = self.clients[socket].recv(self.size)\n        if data:\n            self.clients[socket].send(data)\n        else:\n            self.poller.unregister(socket)\n            self.clients[socket].close()\n            del self.clients[socket]\n\n\nif __name__ == \"__main__\":\n    s = Server(8080)\n",
 			"file": "pollingServer.py",
-			"file_size": 4032,
-			"file_write_time": 130269274686440000,
+			"file_size": 3015,
+			"file_write_time": 130269311363560000,
 			"settings":
 			{
-				"buffer_size": 3926,
+				"buffer_size": 3015,
 				"line_ending": "Unix"
 			}
 		},
 		{
+			"contents": "host default .\nhost cs360.keith.edu ~/School/CS-360/labs/python-mt-downloader\n\nmedia pdf application/pdf\n\nparameter timeout 1\n\nkeith is a jerk",
 			"file": "web.conf",
+			"file_size": 142,
+			"file_write_time": 130269264352640000,
 			"settings":
 			{
 				"buffer_size": 142,
@@ -50,15 +77,18 @@
 			"file": "/home/parallels/School/CS-360/labs/python-mt-downloader/downloadAccelerator.py",
 			"settings":
 			{
-				"buffer_size": 4835,
+				"buffer_size": 5977,
 				"line_ending": "Unix"
 			}
 		},
 		{
+			"contents": "configMethods = {\n    'host': 'addDomain',\n    'media': 'addMediaType',\n    'parameter': 'addParameter'\n}\n\n\n'''\nConfiguration class for the server.  This class reads a configuration file\nand stores the values internally\n'''\n\n\nclass Configuration:\n    domains = {}\n    mediaTypes = {}\n    parameters = {}\n\n    def __init__(self, filename):\n        with open(filename, 'r') as config_file:\n            for line in iter(config_file):\n                # strip the trailing EOL char(S)\n                line = line.lower().strip('\\n\\r')\n\n                # split the string into words (delimited by whitespace)\n                words = line.split()\n                if len(words) <= 0:\n                    continue\n\n                # invoke the proper method based on the keyword\n                keyword = words[0]\n                if keyword in configMethods:\n                    getattr(self, configMethods[keyword])(words[1:])\n\n    def addDomain(self, args):\n        if len(args) > 1:\n            self.setDomainHandler(args[0], args[1])\n\n    def setDomainHandler(self, domain, handler):\n        self.domains[domain] = handler\n\n    def addMediaType(self, args):\n        if len(args) > 1:\n            self.setMediaType(args[0], args[1])\n\n    def setMediaType(self, ext, mediaType):\n        self.mediaTypes[ext] = mediaType\n\n    def addParameter(self, args):\n        if len(args) > 1:\n            self.setParameter(args[0], args[1])\n\n    def setParameter(self, key, value):\n        self.parameters[key] = value\n\n    def getDomainHandler(self, domain):\n        return self.domains[domain]\n\n    def getDomains(self):\n        return self.domains.keys()\n\n    def getMediaType(self, ext):\n        return self.mediaTypes[ext]\n\n    def getMediaExtensions(self):\n        return self.mediaTypes.keys()\n\n    def getParameterValue(self, key):\n        return self.parameters[key]\n\n    def getParameterKeys(self):\n        return self.parameters.keys()\n\n# this is here just for testing purposes\nif __name__ == '__main__':\n    c = Configuration('web.conf')\n    print c.domains\n    print c.mediaTypes\n    print c.parameters\n",
 			"file": "configuration.py",
+			"file_size": 2097,
+			"file_write_time": 130269311261600000,
 			"settings":
 			{
-				"buffer_size": 48,
+				"buffer_size": 2097,
 				"line_ending": "Unix"
 			}
 		}
@@ -66,9 +96,29 @@
 	"build_system": "",
 	"command_palette":
 	{
-		"height": 222.0,
+		"height": 285.0,
 		"selected_items":
 		[
+			[
+				"inde",
+				"Indentation: Convert to Spaces"
+			],
+			[
+				"inden",
+				"Preferences: Key Bindings - Default"
+			],
+			[
+				"space",
+				"Indentation: Convert to Spaces"
+			],
+			[
+				"ta",
+				"Indentation: Convert to Tabs"
+			],
+			[
+				"enab",
+				"Package Control: Enable Package"
+			],
 			[
 				"disa",
 				"Package Control: Disable Package"
@@ -86,7 +136,7 @@
 				"Goto Documentation"
 			]
 		],
-		"width": 568.0
+		"width": 567.0
 	},
 	"console":
 	{
@@ -107,6 +157,10 @@
 	},
 	"file_history":
 	[
+		"/home/parallels/School/CS-360/sample-code/python-networking-and-threading/echo-server/echoserver-poll.py",
+		"/home/parallels/.config/sublime-text-3/Packages/User/SublimePython.sublime-settings",
+		"/home/parallels/.config/sublime-text-3/Packages/SublimePythonIDE/SublimePython.sublime-settings",
+		"/home/parallels/.config/sublime-text-3/Packages/Default/Default (Linux).sublime-keymap",
 		"/home/parallels/School/CS-360/labs/httPyServer/httPyServer.sublime-project",
 		"/home/parallels/.config/sublime-text-3/Packages/SublimeCodeIntel/README.rst",
 		"/home/parallels/.config/sublime-text-3/Packages/User/Preferences.sublime-settings",
@@ -128,6 +182,9 @@
 		"case_sensitive": false,
 		"find_history":
 		[
+			"value",
+			"mediaType",
+			"handler",
 			"configurationMethods",
 			"configureParameter",
 			"configureMediaType",
@@ -159,15 +216,15 @@
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 3926,
+						"buffer_size": 3015,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								181,
-								181
+								1060,
+								1060
 							]
 						],
 						"settings":
@@ -281,7 +338,7 @@
 							"translate_tabs_to_spaces": true
 						},
 						"translation.x": 0.0,
-						"translation.y": 47.0,
+						"translation.y": 387.0,
 						"zoom_level": 1.0
 					},
 					"type": "text"
@@ -423,49 +480,15 @@
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 4835,
+						"buffer_size": 5977,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								0,
-								0
-							]
-						],
-						"settings":
-						{
-							"syntax": "Packages/Python/Python.tmLanguage",
-							"translate_tabs_to_spaces": false
-						},
-						"translation.x": 0.0,
-						"translation.y": 1683.0,
-						"zoom_level": 1.0
-					},
-					"type": "text"
-				}
-			]
-		},
-		{
-			"selected": 0,
-			"sheets":
-			[
-				{
-					"buffer": 3,
-					"file": "configuration.py",
-					"semi_transient": false,
-					"settings":
-					{
-						"buffer_size": 48,
-						"regions":
-						{
-						},
-						"selection":
-						[
-							[
-								48,
-								48
+								1251,
+								1251
 							]
 						],
 						"settings":
@@ -574,10 +597,149 @@
 							},
 							"codeintel_tooltips": "popup",
 							"sublime_auto_complete": true,
-							"syntax": "Packages/Python/Python.tmLanguage"
+							"syntax": "Packages/Python/Python.tmLanguage",
+							"translate_tabs_to_spaces": true
 						},
 						"translation.x": 0.0,
 						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"type": "text"
+				}
+			]
+		},
+		{
+			"selected": 0,
+			"sheets":
+			[
+				{
+					"buffer": 3,
+					"file": "configuration.py",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 2097,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								2097,
+								2097
+							]
+						],
+						"settings":
+						{
+							"codeintel": true,
+							"codeintel_config":
+							{
+								"JavaScript":
+								{
+									"codeintel_max_recursive_dir_depth": 2,
+									"codeintel_scan_files_in_project": false,
+									"javascriptExtraPaths":
+									[
+									]
+								},
+								"PHP":
+								{
+									"codeintel_max_recursive_dir_depth": 5,
+									"codeintel_scan_files_in_project": false,
+									"phpExtraPaths":
+									[
+									]
+								},
+								"Python":
+								{
+									"env":
+									{
+									}
+								}
+							},
+							"codeintel_enabled_languages":
+							[
+								"JavaScript",
+								"Mason",
+								"XBL",
+								"XUL",
+								"RHTML",
+								"SCSS",
+								"Python",
+								"HTML",
+								"Ruby",
+								"Python3",
+								"XML",
+								"Sass",
+								"XSLT",
+								"Django",
+								"HTML5",
+								"Perl",
+								"CSS",
+								"Twig",
+								"Less",
+								"Smarty",
+								"Node.js",
+								"Tcl",
+								"TemplateToolkit",
+								"PHP"
+							],
+							"codeintel_live": true,
+							"codeintel_live_enabled_languages":
+							[
+								"JavaScript",
+								"Mason",
+								"XBL",
+								"XUL",
+								"RHTML",
+								"SCSS",
+								"Python",
+								"HTML",
+								"Ruby",
+								"Python3",
+								"XML",
+								"Sass",
+								"XSLT",
+								"Django",
+								"HTML5",
+								"Perl",
+								"CSS",
+								"Twig",
+								"Less",
+								"Smarty",
+								"Node.js",
+								"Tcl",
+								"TemplateToolkit",
+								"PHP"
+							],
+							"codeintel_max_recursive_dir_depth": 10,
+							"codeintel_scan_exclude_dir":
+							{
+								"JavaScript":
+								[
+									"/build/",
+									"/min/"
+								]
+							},
+							"codeintel_scan_files_in_project": true,
+							"codeintel_selected_catalogs":
+							[
+								"PyWin32",
+								"jQuery",
+								"Rails"
+							],
+							"codeintel_snippets": true,
+							"codeintel_syntax_map":
+							{
+								"Python Django": "Python"
+							},
+							"codeintel_tooltips": "popup",
+							"sublime_auto_complete": true,
+							"syntax": "Packages/Python/Python.tmLanguage",
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 540.0,
 						"zoom_level": 1.0
 					},
 					"type": "text"
@@ -587,7 +749,7 @@
 	],
 	"incremental_find":
 	{
-		"height": 25.0
+		"height": 34.0
 	},
 	"input":
 	{
@@ -667,7 +829,7 @@
 	"show_minimap": false,
 	"show_open_files": false,
 	"show_tabs": true,
-	"side_bar_visible": false,
+	"side_bar_visible": true,
 	"side_bar_width": 220.0,
 	"status_bar_visible": true,
 	"template_settings":

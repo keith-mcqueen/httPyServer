@@ -19,7 +19,7 @@ class ClientConnection:
         return self.closed
 
     def isStale(self):
-        return time() - self.lastAccess > self.timeout
+        return time.time() - self.lastAccess > self.timeout
 
     def getRequest(self):
         try:
@@ -32,7 +32,7 @@ class ClientConnection:
             self.buffer += data
 
             # update the last access time
-            self.lastAccess = time()
+            self.lastAccess = time.time()
 
             # if the buffer contains a complete request message return it
             (before, separator, after) = self.buffer.partition('\r\n\r\n')
@@ -43,3 +43,6 @@ class ClientConnection:
             pass
 
         return None
+
+    def sendResponse(self, response):
+        self.client.send(response)

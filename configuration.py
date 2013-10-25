@@ -1,6 +1,6 @@
 configMethods = {
-    'host': 'addDomain',
-    'media': 'addMediaType',
+    'host': 'addDocRootForDomain',
+    'media': 'addMimeTypeForExt',
     'parameter': 'addParameter'
 }
 
@@ -12,8 +12,8 @@ and stores the values internally
 
 
 class Configuration:
-    domains = {}
-    mediaTypes = {}
+    docRoots = {}
+    mimeTypes = {}
     parameters = {}
 
     def __init__(self, filename):
@@ -32,19 +32,19 @@ class Configuration:
                 if keyword in configMethods:
                     getattr(self, configMethods[keyword])(words[1:])
 
-    def addDomain(self, args):
+    def addDocRootForDomain(self, args):
         if len(args) > 1:
-            self.setDomainHandler(args[0], args[1])
+            self.setDocRootForDomain(args[0], args[1])
 
-    def setDomainHandler(self, domain, handler):
-        self.domains[domain] = handler
+    def setDocRootForDomain(self, domain, docRoot):
+        self.docRoots[domain] = docRoot
 
-    def addMediaType(self, args):
+    def addMimeTypeForExt(self, args):
         if len(args) > 1:
-            self.setMediaType(args[0], args[1])
+            self.setMimeTypeForExt(args[0], args[1])
 
-    def setMediaType(self, ext, mediaType):
-        self.mediaTypes[ext] = mediaType
+    def setMimeTypeForExt(self, ext, mediaType):
+        self.mimeTypes[ext] = mediaType
 
     def addParameter(self, args):
         if len(args) > 1:
@@ -53,20 +53,29 @@ class Configuration:
     def setParameter(self, key, value):
         self.parameters[key] = value
 
-    def getDomainHandler(self, domain):
-        return self.domains[domain]
+    def getDocRootForDomain(self, domain):
+        if not domain in self.docRoots:
+            return self.getDocRootForDomain('default')
 
-    def getDomains(self):
-        return self.domains.keys()
+        return self.docRoots[domain]
 
-    def getMediaType(self, ext):
-        return self.mediaTypes[ext]
+    def getdocRoots(self):
+        return self.docRoots.keys()
 
-    def getMediaExtensions(self):
-        return self.mediaTypes.keys()
+    def getMimeTypeForExt(self, ext):
+        if not ext in self.mimeTypes:
+            return 'text/plain'
 
-    def getParameterValue(self, key):
-        return self.parameters[key]
+        return self.mimeTypes[ext]
+
+    def getExts(self):
+        return self.mimeTypes.keys()
+
+    def getParameterValue(self, key, default):
+        if key in self.parameters:
+            return self.parameters[key]
+
+        return default
 
     def getParameterKeys(self):
         return self.parameters.keys()
@@ -74,6 +83,6 @@ class Configuration:
 # this is here just for testing purposes
 if __name__ == '__main__':
     c = Configuration('web.conf')
-    print c.domains
-    print c.mediaTypes
+    print c.docRoots
+    print c.mimeTypes
     print c.parameters
