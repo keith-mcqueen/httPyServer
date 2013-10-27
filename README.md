@@ -16,6 +16,8 @@ Below are the source files that make up this project with a short description of
 * httpRequestHandler.py
 
 >Contains the `HttpRequestHandler` class which performs all the work related to handling a client request.  It currently supports the `HEAD` and `GET` (not including Range requests) verbs from HTTP 1.1.  The `handleRequest` method makes use of some lightweight reflection to determine which internal method should be used to actually handle the request based on the verb specified in the reqeust header.  Both the `handleHead` and `handleGet` methods use the `getResponseHeader` method to read the details of the request headers and to resolve the requested resource to an actual file.
+>
+>Also contains the `HttpException` class used internally to raise exceptions and handle them by returning the appropriate response.
 
 * pollingServer.py
 
