@@ -20,7 +20,7 @@ class Configuration:
         with open(filename, 'r') as config_file:
             for line in iter(config_file):
                 # strip the trailing EOL char(S)
-                line = line.lower().strip('\n\r')
+                line = line.strip('\n\r')
 
                 # split the string into words (delimited by whitespace)
                 words = line.split()

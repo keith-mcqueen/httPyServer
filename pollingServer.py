@@ -1,6 +1,7 @@
 import select
 import socket
 import sys
+import time
 from configuration import Configuration
 from clientConnection import ClientConnection
 from httpRequestHandler import HttpRequestHandler
@@ -15,20 +16,25 @@ class Server:
     '''
     *** initializer ***
     '''
-    def __init__(self, port):
+    def __init__(self, port, debug):
         # load the configuration file
         self.config = Configuration('web.conf')
+        self.config.setParameter('Debug', debug)
 
         self.host = ""
         self.port = port
-
-        # open the socket
-        self.open_socket()
+        self.debug = debug
 
         # prepare the dictionary of clients
         self.clients = {}
 
+        # set the timeout value
         self.timeout = int(self.config.getParameterValue('timeout', 1))
+
+        # open the socket
+        self.open_socket()
+
+        self.lastHarvestTime = time.time()
 
     '''
     Set up the socket for incoming clients
@@ -51,8 +57,12 @@ class Server:
     '''
     def run(self):
         self.poller = select.epoll()
-        self.pollmask = select.EPOLLIN | select.EPOLLHUP | select.EPOLLERR
+        self.pollmask =\
+            select.EPOLLIN |\
+            select.EPOLLHUP |\
+            select.EPOLLERR
         self.poller.register(self.server, self.pollmask)
+
         while True:
             # poll sockets
             try:
@@ -73,6 +83,9 @@ class Server:
 
                 # handle client socket
                 self.handleClient(socket)
+
+            # harvest idle/stale connections
+            self.harvestIdleConnections()
 
     '''
     Handle error condition
@@ -95,7 +108,7 @@ class Server:
     def handleServer(self):
         (client, address) = self.server.accept()
         client.setblocking(0)
-        self.clients[client.fileno()] = ClientConnection(client, self.timeout)
+        self.clients[client.fileno()] = ClientConnection(client, self.config)
         self.poller.register(client.fileno(), self.pollmask)
 
     '''
@@ -111,8 +124,19 @@ class Server:
             del self.clients[socket]
 
     def handleRequest(self, client, request, config):
-        HttpRequestHandler().handleRequest(client, request, config)
+        HttpRequestHandler(config).handleRequest(client, request)
 
+    def harvestIdleConnections(self):
+        # if it's been long enough since we last harvested, then harvest again
+        if (time.time() - self.lastHarvestTime) >= self.timeout:
+            for client, connection in self.clients.items():
+                if connection.isClosed():
+                    del self.clients[client]
+                elif connection.isStale():
+                    connection.close()
+
+            # reset the last harvest time
+            self.lastHarvestTime = time.time()
 
 if __name__ == "__main__":
     s = Server(8080)

@@ -1,3 +1,4 @@
+import socket
 import time
 import os
 from StringIO import StringIO
@@ -38,7 +39,7 @@ defaultResponse =\
     '<body>\r\n' +\
     '<h1>Success!</h1>\r\n' +\
     '<p>\r\n' +\
-    'If you''re seeing this, then you have successfully configured the ' +\
+    'If you are seeing this, then you have successfully configured the ' +\
     'httPyServer for your system. You may replace this message by installing ' +\
     'a file named index.html in the document root location for the configured ' +\
     'domain(s).' +\
@@ -48,48 +49,49 @@ defaultResponse =\
 
 
 class HttpRequestHandler:
-    def __init__(self):
+    def __init__(self, config):
         self.requestHeaderValues = {}
         self.responseHeaderValues = {}
         self.resource = None
+        self.config = config
+        self.debug = config.getParameterValue('Debug', False)
 
-    def handleRequest(self, client, request, config):
+    def handleRequest(self, client, request):
+        if self.debug:
+            print 'HttpRequestHandler.handleRequest():: handling request'
+
         line = request.split('\r\n', 1)[0]
-        verb = line.split(' ', 1)[0]
-        if verb in handlerMethods:
-            return getattr(self, handlerMethods[verb])(client, request, config)
+        if self.debug:
+            print 'HttpRequestHandler.handleRequest():: first line is:'
+            print line
 
+        verb = line.split(' ', 1)[0]
+        if self.debug:
+            print 'HttpRequestHandler.handleRequest():: first word in line is:'
+            print verb
+
+        if verb in handlerMethods:
+            if self.debug:
+                print 'HttpRequestHandler.handleRequest():: forwarding request to handler method'
+            return getattr(self, handlerMethods[verb])(client, request)
+
+        if self.debug:
+            print 'HttpRequestHandler.handleRequest():: HTTP verb not recognized; returning error 501'
         return self.handlerError(501)
 
-    def handleHead(self, client, request, config):
-        # split the request into lines
-        lines = request.splitlines()
-        if len(lines) <= 0:
-            return self.handleError(400)
-
-        # get the resource URL from the first line
-        url = lines[0].split()[1]
-
-        # parse out the remaining header lines
-        for line in lines[1:]:
-            (key, sep, val) = line.partition(': ')
-            self.requestHeaderValues[key] = val
-
-        # try to resolve the resource based on the given URI
+    def handleHead(self, client, request):
         try:
-            self.resolveResource(url, config)
+            client.sendResponse(self.getResponseHeader(request))
         except HttpException as e:
             self.handleError(client, e.errNum)
 
-        # generate the response headers
-        client.sendResponse(self.generateResponseHeaders(200))
-
-    def handleGet(self, client, request, config):
-        # get the HEAD
-        self.handleHead(client, request, config)
-
-        if self.resource:
-            self.sendResource(client, self.resource)
+    def handleGet(self, client, request):
+        try:
+            responseHeader = self.getResponseHeader(request)
+            if self.resource:
+                client.sendResponse(responseHeader, self.resource)
+        except HttpException as e:
+            self.handleError(client, e.errNum)
 
     def handleError(self, client, errorNum):
         if not errorNum in responseCodes:
@@ -108,7 +110,27 @@ class HttpRequestHandler:
         # generate the response headers
         headers = self.generateResponseHeaders(errorNum)
 
-        client.sendResponse('%s\r\n%s' % (headers, entity))
+        client.sendResponse(headers, StringIO(entity))
+
+    def getResponseHeader(self, request):
+        # split the request into lines
+        lines = request.splitlines()
+        if len(lines) <= 0:
+            return self.handleError(400)
+
+        # get the resource URL from the first line
+        url = lines[0].split()[1]
+
+        # parse out the remaining header lines
+        for line in lines[1:]:
+            (key, sep, val) = line.partition(': ')
+            self.requestHeaderValues[key] = val
+
+        # try to resolve the resource based on the given URI
+        self.resolveResource(url, self.config)
+
+        # generate the response headers
+        return self.generateResponseHeaders(200)
 
     def generateResponseHeaders(self, responseCode):
         if not responseCode in responseCodes:
@@ -197,15 +219,6 @@ class HttpRequestHandler:
                     raise HttpException(404)
             else:  # Internal Error
                 raise HttpException(500)
-
-    def sendResource(self, client, resource):
-        try:
-            bytes = 'empty'
-            while (bytes):
-                bytes = resource.read(512*1024)
-                client.sendResponse(bytes)
-        finally:
-            resource.close()
 
 
 class HttpException(Exception):
