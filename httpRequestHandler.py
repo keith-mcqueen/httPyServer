@@ -116,10 +116,14 @@ class HttpRequestHandler:
         # split the request into lines
         lines = request.splitlines()
         if len(lines) <= 0:
-            return self.handleError(400)
+            raise HttpException(400)
 
         # get the resource URL from the first line
-        url = lines[0].split()[1]
+        words = lines[0].split()
+        if len(words) < 3:
+            raise HttpException(400)
+
+        url = words[1]
 
         # parse out the remaining header lines
         for line in lines[1:]:
