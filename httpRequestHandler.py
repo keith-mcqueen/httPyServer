@@ -77,7 +77,7 @@ class HttpRequestHandler:
 
         if self.debug:
             print 'HttpRequestHandler.handleRequest():: HTTP verb not recognized; returning error 501'
-        return self.handlerError(501)
+        return self.handleError(501)
 
     def handleHead(self, client, request):
         try:
